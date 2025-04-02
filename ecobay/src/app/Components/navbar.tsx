@@ -42,9 +42,6 @@ const Navbar = () => {
                             <Link href="/" className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-700 hover:text-emerald-600 hover:border-b-2 hover:border-emerald-500 transition-colors">
                                 Home
                             </Link>
-                            <Link href="/products" className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-700 hover:text-emerald-600 hover:border-b-2 hover:border-emerald-500 transition-colors">
-                                Products
-                            </Link>
                             <Link href="/about" className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-700 hover:text-emerald-600 hover:border-b-2 hover:border-emerald-500 transition-colors">
                                 About
                             </Link>
