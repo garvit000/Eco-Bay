@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Navbar from '../Components/navbar';
 import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 
@@ -73,6 +74,8 @@ export default function Register() {
     };
 
     return (
+        <>
+        <Navbar/>
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
             <div className="max-w-md w-full p-6 bg-white rounded-lg shadow-lg">
                 <h1 className="text-3xl font-bold text-center text-green-600 mb-6">Create an Account</h1>
@@ -177,5 +180,6 @@ export default function Register() {
                 </div>
             </div>
         </div>
+        </>
     );
 }

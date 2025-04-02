@@ -1,5 +1,8 @@
+import Navbar from "../Components/navbar";
 export default function Login() {
     return (
+        <>
+        <Navbar/>
         <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-green-50 to-teal-100 p-6">
             <div className="w-full max-w-md bg-white rounded-xl shadow-lg p-8 border border-green-100">
                 <div className="mb-6 text-center">
@@ -54,5 +57,6 @@ export default function Login() {
                 </div>
             </div>
         </div>
+        </>
     );
 }
