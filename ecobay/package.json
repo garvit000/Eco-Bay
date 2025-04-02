@@ -11,13 +11,18 @@
   "dependencies": {
     "@google/genai": "^0.7.0",
     "@tailwindcss/postcss": "^4.0.17",
+<<<<<<< HEAD
     "firebase": "^11.6.0",
+=======
+    "framer-motion": "^12.6.3",
+>>>>>>> 7950158bb52753430253cf393562d6db7f83d02b
     "lucide-react": "^0.486.0",
     "next": "15.2.4",
     "postcss": "^8.5.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-icons": "^5.5.0",
+    "react-intersection-observer": "^9.16.0",
     "tailwindcss": "^4.0.17",
     "zod": "^3.24.2"
   },
