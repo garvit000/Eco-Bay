@@ -1,3 +1,27 @@
+"use client";
+
+import { useState } from "react";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../../../ecobaybackend/lib/firebase";
+import { useRouter } from "next/navigation";
+
+  const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [error, setError] = useState<string>("");
+  const router = useRouter();
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(""); // Reset error message before trying to login
+
+    try {
+      // Try to log in with email and password
+      await signInWithEmailAndPassword(auth, email, password);
+      router.push("/dashboard"); // Redirect to the dashboard after successful login
+    } catch (error: any) {
+      setError(error.message); // Show any error message (e.g., invalid credentials)
+    }
+  };
 export default function Login() {
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-green-50 to-teal-100 p-6">
