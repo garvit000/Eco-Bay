@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useRef, useState, useCallback } from "react";
-import { BrowserMultiFormatReader, NotFoundException } from "@zxing/library";
-import { X, Camera, CameraOff, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import { X, CameraOff, RefreshCw } from "lucide-react";
 
 interface Props {
   onDetected: (barcode: string, productName?: string) => void;
@@ -13,7 +13,7 @@ async function lookupBarcode(barcode: string): Promise<string | null> {
   try {
     const res = await fetch(
       `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,
-      { signal: AbortSignal.timeout(4000) }
+      { signal: AbortSignal.timeout(5000) }
     );
     if (!res.ok) return null;
     const data = await res.json() as {
@@ -30,114 +30,92 @@ async function lookupBarcode(barcode: string): Promise<string | null> {
   }
 }
 
-export default function BarcodeScanner({ onDetected, onClose }: Props) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+const SCANNER_ID = "eco-bay-barcode-scanner";
 
-  const [status, setStatus] = useState<"idle" | "scanning" | "found" | "error">("idle");
+export default function BarcodeScanner({ onDetected, onClose }: Props) {
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const isScanningRef = useRef(false);
+
+  const [status, setStatus] = useState<"scanning" | "found" | "error">("scanning");
   const [errorMsg, setErrorMsg] = useState("");
   const [detectedBarcode, setDetectedBarcode] = useState("");
   const [productName, setProductName] = useState<string | null>(null);
   const [isLooking, setIsLooking] = useState(false);
-  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
-  const [activeCameraIdx, setActiveCameraIdx] = useState(0);
 
-  const stopScanner = useCallback(() => {
-    try { readerRef.current?.reset(); } catch { /* ignore */ }
-    // Also stop any lingering media stream tracks
-    if (videoRef.current?.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach((t) => t.stop());
-      videoRef.current.srcObject = null;
+  const stopScanner = async () => {
+    if (scannerRef.current && isScanningRef.current) {
+      try {
+        await scannerRef.current.stop();
+        scannerRef.current.clear();
+      } catch { /* already stopped */ }
+      isScanningRef.current = false;
     }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-  }, []);
+  };
 
-  const startScanner = useCallback(async (cameraDeviceId?: string) => {
-    if (!videoRef.current) return;
-    stopScanner();
+  const startScanner = async () => {
+    await stopScanner();
     setStatus("scanning");
     setDetectedBarcode("");
     setProductName(null);
 
     try {
-      const reader = new BrowserMultiFormatReader();
-      readerRef.current = reader;
+      const scanner = new Html5Qrcode(SCANNER_ID, {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.DATA_MATRIX,
+        ],
+        verbose: false,
+      });
+      scannerRef.current = scanner;
 
-      await reader.decodeFromVideoDevice(
-        cameraDeviceId ?? null,
-        videoRef.current,
-        async (result, err) => {
-          if (result) {
-            const barcodeValue = result.getText();
-            setDetectedBarcode(barcodeValue);
-            setStatus("found");
-            stopScanner();
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 240, height: 140 }, aspectRatio: 1.4 },
+        async (decodedText) => {
+          // Success — stop scanning and look up product
+          await stopScanner();
+          setDetectedBarcode(decodedText);
+          setStatus("found");
 
-            // Try Open Food Facts lookup
-            setIsLooking(true);
-            const name = await lookupBarcode(barcodeValue);
-            setProductName(name);
-            setIsLooking(false);
-          } else if (err && !(err instanceof NotFoundException)) {
-            // Ignore NotFoundException — it's just "no barcode in this frame"
-            console.debug("Scanner error:", err);
-          }
-        }
+          setIsLooking(true);
+          const name = await lookupBarcode(decodedText);
+          setProductName(name);
+          setIsLooking(false);
+        },
+        () => { /* frame error — ignore, happens every frame without a barcode */ }
       );
-      // (no controls ref — reader.reset() handles teardown)
+      isScanningRef.current = true;
     } catch (err) {
       setStatus("error");
-      const msg = (err as Error).message ?? "";
-      if (msg.includes("Permission") || msg.includes("permission") || msg.includes("NotAllowed")) {
+      const msg = String(err);
+      if (/permission|notallowed/i.test(msg)) {
         setErrorMsg("Camera access denied. Please allow camera permissions in your browser and try again.");
+      } else if (/notfound|nodevice/i.test(msg)) {
+        setErrorMsg("No camera found. Please connect a camera and try again.");
       } else {
-        setErrorMsg("Could not start the camera. Make sure a camera is connected and no other app is using it.");
+        setErrorMsg("Could not start the camera. Please check your browser settings.");
       }
     }
-  }, [stopScanner]);
-
-  // Enumerate cameras on mount
-  useEffect(() => {
-    (async () => {
-      try {
-        // Request permission first (needed to get real device labels)
-        await navigator.mediaDevices.getUserMedia({ video: true });
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter((d) => d.kind === "videoinput");
-        setCameras(videoDevices);
-        // Prefer back camera on mobile
-        const backIdx = videoDevices.findIndex((d) =>
-          /back|rear|environment/i.test(d.label)
-        );
-        const idx = backIdx >= 0 ? backIdx : 0;
-        setActiveCameraIdx(idx);
-        await startScanner(videoDevices[idx]?.deviceId);
-      } catch {
-        await startScanner(); // fall back to default camera
-      }
-    })();
-
-    return () => stopScanner();
-  }, [startScanner, stopScanner]);
-
-  const switchCamera = async () => {
-    if (cameras.length < 2) return;
-    const nextIdx = (activeCameraIdx + 1) % cameras.length;
-    setActiveCameraIdx(nextIdx);
-    await startScanner(cameras[nextIdx]?.deviceId);
   };
+
+  useEffect(() => {
+    // Small delay to ensure the DOM element is mounted
+    const timer = setTimeout(() => { startScanner(); }, 100);
+    return () => {
+      clearTimeout(timer);
+      stopScanner();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleConfirm = () => {
     onDetected(detectedBarcode, productName ?? undefined);
-  };
-
-  const handleRetry = () => {
-    startScanner(cameras[activeCameraIdx]?.deviceId);
   };
 
   return (
@@ -147,65 +125,37 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
         <div className="bg-gradient-to-r from-emerald-600 to-green-500 p-4 flex items-center justify-between">
           <div>
             <h2 className="text-white font-bold text-lg">Scan Barcode</h2>
-            <p className="text-emerald-100 text-xs">Point your camera at a product barcode</p>
+            <p className="text-emerald-100 text-xs mt-0.5">Point your camera at a product barcode or QR code</p>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => { stopScanner(); onClose(); }}
             className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition-colors"
+            aria-label="Close scanner"
           >
             <X className="w-4 h-4 text-white" />
           </button>
         </div>
 
-        {/* Camera view */}
-        <div className="relative bg-black" style={{ aspectRatio: "4/3" }}>
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            muted
-            playsInline
+        {/* Scanner area — html5-qrcode renders the video here */}
+        <div className="relative bg-black">
+          {/* This div is where html5-qrcode mounts the video element */}
+          <div
+            id={SCANNER_ID}
+            className="w-full"
+            style={{ minHeight: "260px" }}
           />
 
-          {/* Scanner overlay */}
-          {status === "scanning" && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              {/* Dim corners */}
-              <div className="absolute inset-0 bg-black/40" />
-              {/* Scan window */}
-              <div className="relative z-10 w-56 h-36">
-                {/* Corner brackets */}
-                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg" />
-                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-emerald-400 rounded-tr-lg" />
-                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-emerald-400 rounded-bl-lg" />
-                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-emerald-400 rounded-br-lg" />
-                {/* Scan line */}
-                <div className="absolute left-2 right-2 h-0.5 bg-emerald-400/80 animate-scan-line shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-              </div>
-              <p className="absolute bottom-4 text-white text-xs font-medium tracking-wide">
-                Align barcode within the frame
-              </p>
-            </div>
-          )}
-
-          {/* Error state */}
+          {/* Error overlay */}
           {status === "error" && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 gap-4 p-6">
               <CameraOff className="w-12 h-12 text-gray-400" />
-              <p className="text-gray-300 text-sm text-center">{errorMsg}</p>
+              <p className="text-gray-300 text-sm text-center leading-relaxed">{errorMsg}</p>
               <button
-                onClick={handleRetry}
+                onClick={startScanner}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-full hover:bg-emerald-700 transition-colors"
               >
                 <RefreshCw className="w-4 h-4" /> Try Again
               </button>
-            </div>
-          )}
-
-          {/* Idle */}
-          {status === "idle" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 gap-3">
-              <Camera className="w-10 h-10 text-gray-400 animate-pulse" />
-              <p className="text-gray-400 text-sm">Starting camera…</p>
             </div>
           )}
         </div>
@@ -215,23 +165,23 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
           {status === "found" ? (
             <div className="space-y-4">
               <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
-                <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wide mb-1">Barcode Detected</p>
-                <p className="font-mono text-gray-800 font-semibold text-lg">{detectedBarcode}</p>
+                <p className="text-xs text-emerald-600 font-semibold uppercase tracking-wide mb-1">Barcode Detected ✓</p>
+                <p className="font-mono text-gray-800 font-semibold text-lg break-all">{detectedBarcode}</p>
                 {isLooking ? (
-                  <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                  <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1.5">
                     <span className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin inline-block" />
                     Looking up product…
                   </p>
                 ) : productName ? (
-                  <p className="text-sm text-gray-600 mt-1">📦 {productName}</p>
+                  <p className="text-sm text-gray-600 mt-1.5">📦 {productName}</p>
                 ) : (
-                  <p className="text-xs text-gray-400 mt-1">Product not found in database — will analyse by barcode</p>
+                  <p className="text-xs text-gray-400 mt-1.5">Product not in database — will analyse by barcode number</p>
                 )}
               </div>
 
               <div className="flex gap-3">
                 <button
-                  onClick={handleRetry}
+                  onClick={startScanner}
                   className="flex-1 py-2.5 border-2 border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-all flex items-center justify-center gap-1.5"
                 >
                   <RefreshCw className="w-4 h-4" /> Scan Again
@@ -246,20 +196,10 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
               </div>
             </div>
           ) : status === "scanning" ? (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-                Scanning…
-              </div>
-              {cameras.length > 1 && (
-                <button
-                  onClick={switchCamera}
-                  className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 px-3 py-1.5 border border-emerald-200 rounded-full hover:bg-emerald-50 transition-all"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  Flip Camera
-                </button>
-              )}
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+              Scanning for barcodes…
+              <span className="ml-auto text-xs text-gray-400">EAN · UPC · QR · Code128</span>
             </div>
           ) : null}
         </div>
