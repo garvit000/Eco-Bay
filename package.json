@@ -11,6 +11,8 @@
   "dependencies": {
     "@google/genai": "^0.7.0",
     "@tailwindcss/postcss": "^4.0.17",
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
     "firebase": "^11.10.0",
     "framer-motion": "^12.6.3",
     "lucide-react": "^0.486.0",

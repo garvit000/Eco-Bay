@@ -2,6 +2,9 @@
 import Link from "next/link";
 import { FaLeaf, FaShoppingBag, FaRecycle, FaLink, FaBarcode, FaEnvelope, FaStar, FaArrowRight } from "react-icons/fa";
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
+
+const BarcodeScanner = dynamic(() => import("./BarcodeScanner"), { ssr: false });
 
 interface SustainabilityResult {
   rating: number;
@@ -44,6 +47,7 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -65,13 +69,24 @@ export default function Home() {
     }
   };
 
-  const handleScan = () => {
+  const handleScan = () => setShowScanner(true);
+
+  const handleBarcodeDetected = async (barcode: string, productName?: string) => {
+    setShowScanner(false);
+    const query = productName ? `${productName} (barcode: ${barcode})` : `product with barcode ${barcode}`;
+    setProductUrl(query);
+    // Auto-trigger analysis
     setIsAnalysing(true);
-    setTimeout(() => {
+    setAnalyseError("");
+    setResult(null);
+    try {
+      const res = await analyseSustainability(query);
+      setResult(res);
+    } catch {
+      setAnalyseError("Could not analyse this product. Please try again.");
+    } finally {
       setIsAnalysing(false);
-      setProductUrl("https://example.com/sample-barcode-product");
-      setResult({ rating: 3.5, reason: "Barcode scan demo — moderate sustainability rating.", tip: "Consider choosing organic variants for a better eco score." });
-    }, 2000);
+    }
   };
 
   const handleSubscribe = (e: React.FormEvent) => {
@@ -97,6 +112,13 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 via-emerald-50 to-white overflow-hidden">
+      {/* Barcode Scanner Modal */}
+      {showScanner && (
+        <BarcodeScanner
+          onDetected={handleBarcodeDetected}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
       {/* Hero */}
       <div className="relative h-[600px] overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-green-800 to-emerald-900 opacity-90 z-0" />
