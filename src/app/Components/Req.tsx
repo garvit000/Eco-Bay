@@ -1,24 +1,26 @@
 "use client";
-import { KeyboardEvent, useState } from "react";
+import { KeyboardEvent, useState, useRef, useEffect } from "react";
+import { Leaf, X, Send, Bot } from "lucide-react";
 
-async function generateContent(prompt: string) {
+interface Message {
+  role: "user" | "assistant";
+  text: string;
+}
+
+async function callChat(prompt: string, mode: "chat" | "sustainability" = "chat"): Promise<string> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
 
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ prompt }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, mode }),
       signal: controller.signal,
     });
 
     if (!response.ok) {
-      const errorData = (await response.json().catch(() => ({}))) as {
-        error?: string;
-      };
+      const errorData = (await response.json().catch(() => ({}))) as { error?: string };
       throw new Error(errorData.error ?? "Chat request failed");
     }
 
@@ -31,102 +33,131 @@ async function generateContent(prompt: string) {
 
 export default function Req() {
   const [prompt, setPrompt] = useState("");
-  const [response, setResponse] = useState("");
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      role: "assistant",
+      text: "Hi! I'm EcoBot 🌿 Ask me anything about sustainability, eco-friendly products, or how to reduce your environmental impact!",
+    },
+  ]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isOpen]);
 
   const handleSubmit = async () => {
-    if (!prompt.trim()) return;
-    
+    if (!prompt.trim() || isLoading) return;
+
+    const userMessage = prompt.trim();
+    setPrompt("");
+    setMessages((prev) => [...prev, { role: "user", text: userMessage }]);
     setIsLoading(true);
-    setError("");
-    
+
     try {
-      const result = await generateContent(prompt);
-      if(result) setPrompt("");
-      setResponse(result || "No response generated");
+      const result = await callChat(userMessage);
+      setMessages((prev) => [...prev, { role: "assistant", text: result }]);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to generate response. Please try again.",
-      );
-      console.error(err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: err instanceof Error ? err.message : "Sorry, something went wrong. Please try again.",
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      handleSubmit();
-    }
+    if (event.key === "Enter") handleSubmit();
   };
 
   return (
     <div className="fixed bottom-6 right-6 z-50">
-      {/* Chat bubble button */}
-      <button 
+      {/* Toggle button */}
+      <button
         onClick={() => setIsOpen(!isOpen)}
-        className="bg-blue-600 hover:bg-blue-700 w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all duration-300"
+        className="bg-emerald-600 hover:bg-emerald-700 w-14 h-14 rounded-full flex items-center justify-center shadow-xl transition-all duration-300 hover:scale-110"
+        aria-label="Toggle EcoBot chat"
       >
         {isOpen ? (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <X className="h-6 w-6 text-white" />
         ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-          </svg>
+          <Leaf className="h-6 w-6 text-white" />
         )}
       </button>
 
       {/* Chat window */}
       {isOpen && (
-        <div className="absolute bottom-20 right-0 w-80 md:w-96 bg-white rounded-lg shadow-xl transition-all duration-300 overflow-hidden">
-          <div className="bg-blue-600 p-4">
-            <h2 className="text-lg font-bold text-white">AI Assistant</h2>
+        <div className="absolute bottom-16 right-0 w-80 md:w-96 bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col" style={{ maxHeight: "520px" }}>
+          {/* Header */}
+          <div className="bg-gradient-to-r from-emerald-600 to-green-500 p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
+              <Bot className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white">EcoBot</h2>
+              <p className="text-xs text-emerald-100">Your sustainability assistant</p>
+            </div>
+            <div className="ml-auto flex items-center gap-1">
+              <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
+              <span className="text-xs text-emerald-100">Online</span>
+            </div>
           </div>
-          
-          <div className="max-h-96 overflow-y-auto p-4">
-            {response && (
-              <div className="mb-4 p-3 bg-gray-100 rounded-lg">
-                <p className="whitespace-pre-wrap text-sm">{response}</p>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50" style={{ minHeight: "260px", maxHeight: "340px" }}>
+            {messages.map((msg, i) => (
+              <div
+                key={i}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                    msg.role === "user"
+                      ? "bg-emerald-600 text-white rounded-br-sm"
+                      : "bg-white text-gray-700 shadow-sm border border-gray-100 rounded-bl-sm"
+                  }`}
+                >
+                  {msg.text}
+                </div>
+              </div>
+            ))}
+            {isLoading && (
+              <div className="flex justify-start">
+                <div className="bg-white border border-gray-100 shadow-sm px-4 py-3 rounded-2xl rounded-bl-sm">
+                  <div className="flex gap-1 items-center">
+                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                </div>
               </div>
             )}
-            
-            {error && <p className="mb-4 text-red-500 text-sm">{error}</p>}
+            <div ref={bottomRef} />
           </div>
-          
-          <div className="p-4 border-t border-gray-200">
-            <div className="flex">
-              <input 
-                type="text" 
+
+          {/* Input */}
+          <div className="p-3 border-t border-gray-100 bg-white">
+            <div className="flex gap-2">
+              <input
+                type="text"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask something..." 
-                className="flex-1 p-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Ask about sustainability…"
+                className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent transition-all"
                 disabled={isLoading}
               />
-              <button 
-                onClick={handleSubmit} 
-                className={`p-2 rounded-r-md text-white ${
-                  isLoading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
-                }`}
+              <button
+                onClick={handleSubmit}
                 disabled={isLoading || !prompt.trim()}
+                className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-40 transition-colors"
               >
-                {isLoading ? (
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                )}
+                <Send className="h-4 w-4" />
               </button>
             </div>
           </div>

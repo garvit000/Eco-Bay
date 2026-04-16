@@ -47,7 +47,7 @@ export default function ContactPage() {
                     transition={{ duration: 0.8 }}
                 >
                     <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-cyan-400 bg-clip-text text-transparent">Get in Touch</h1>
-                    <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">We'd love to hear from you. Please fill out the form below or reach out via the contact information.</p>
+                    <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">We&apos;d love to hear from you. Please fill out the form below or reach out via the contact information.</p>
                 </motion.div>
 
                 <div className="flex flex-wrap gap-8 mb-12">
@@ -101,7 +101,7 @@ export default function ContactPage() {
                                     <div className="flex items-center justify-center w-20 h-20 text-3xl bg-gradient-to-r from-blue-600 to-cyan-400 text-white rounded-full mb-6">✓</div>
                                     <h3 className="text-2xl font-semibold text-gray-800 mb-4">Thank You!</h3>
                                     <p className="text-gray-600 mb-2">Your message has been sent successfully.</p>
-                                    <p className="text-gray-600">We'll get back to you as soon as possible.</p>
+                                    <p className="text-gray-600">We&apos;ll get back to you as soon as possible.</p>
                                 </motion.div>
                             </div>
                         ) : (
