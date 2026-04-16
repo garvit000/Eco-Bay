@@ -17,6 +17,48 @@ const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) console.warn("[EcoBay AI] GEMINI_API_KEY is not configured.");
 const ai = new GoogleGenAI({ apiKey: apiKey ?? "" });
 
+/** Model to use — 1.5-flash has a separate free-tier quota from 2.0-flash */
+const MODEL = "gemini-1.5-flash";
+
+/** Sleep helper */
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * Calls Gemini with automatic retry on 429 (rate limit).
+ * Waits 1 s on first retry, 2 s on second.
+ */
+async function generateWithRetry(
+  contents: string,
+  systemInstruction: string,
+  maxOutputTokens: number,
+  temperature: number,
+  maxRetries = 2
+): Promise<string> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await ai.models.generateContent({
+        model: MODEL,
+        contents,
+        config: { systemInstruction, maxOutputTokens, temperature },
+      });
+      return result.text ?? "";
+    } catch (err) {
+      const httpStatus = (err as { status?: number }).status;
+      if (httpStatus === 429 && attempt < maxRetries) {
+        // Try to honour the retryDelay from the API response, else use backoff
+        const raw = String(err);
+        const delayMatch = raw.match(/(\d+\.?\d*)s/);
+        const delaySec = delayMatch ? Math.min(parseFloat(delayMatch[1]), 15) : (attempt + 1) * 1.2;
+        console.warn(`[EcoBay AI] 429 – retrying in ${delaySec}s (attempt ${attempt + 1}/${maxRetries})`);
+        await sleep(delaySec * 1000);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Max retries exceeded");
+}
+
 // ─── System instructions per mode ────────────────────────────────────────────
 
 const INSTRUCTIONS = {
@@ -164,18 +206,15 @@ export async function POST(request: Request) {
     const { prompt, mode, context } = parsed.data;
     const fullPrompt = context ? `${context}\n\n${prompt}` : prompt;
 
-    const result = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: fullPrompt,
-      config: {
-        systemInstruction: INSTRUCTIONS[mode],
-        maxOutputTokens: TOKEN_LIMITS[mode],
-        temperature: TEMPERATURES[mode],
-      },
-    });
+    const result = await generateWithRetry(
+      fullPrompt,
+      INSTRUCTIONS[mode],
+      TOKEN_LIMITS[mode],
+      TEMPERATURES[mode]
+    );
 
     return NextResponse.json({
-      text: result.text ?? "",
+      text: result,
       mode,
     });
   } catch (error) {

@@ -12,30 +12,38 @@ interface SustainabilityResult {
   tip: string;
 }
 
-async function analyseSustainability(url: string): Promise<SustainabilityResult> {
-  const response = await fetch("/api/chat", {
+async function analyseSustainability(input: string): Promise<SustainabilityResult> {
+  const response = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      prompt: `Analyse the sustainability of this product: ${url}`,
+      prompt: `Analyse the sustainability of this product: ${input}`,
       mode: "sustainability",
     }),
   });
 
-  if (!response.ok) throw new Error("Analysis failed");
+  // Always read the body so we can extract the real error message
+  const data = await response.json() as { text?: string; error?: string };
 
-  const data = await response.json() as { text?: string };
+  if (!response.ok) {
+    const msg = data.error ?? `AI returned ${response.status}`;
+    throw new Error(msg);
+  }
+
   const text = data.text ?? "";
+  if (!text.trim()) throw new Error("AI returned an empty response. Please try again.");
 
   // Parse structured response: RATING: X\nREASON: ...\nTIP: ...
   const ratingMatch = text.match(/RATING:\s*([\d.]+)/i);
   const reasonMatch = text.match(/REASON:\s*(.+)/i);
-  const tipMatch = text.match(/TIP:\s*(.+)/i);
+  const tipMatch    = text.match(/TIP:\s*(.+)/i);
+
+  if (!ratingMatch) throw new Error("AI could not parse a rating from this product. Try a product name or brand instead of a URL.");
 
   return {
-    rating: ratingMatch ? Math.min(5, Math.max(0, parseFloat(ratingMatch[1]))) : 3.0,
-    reason: reasonMatch ? reasonMatch[1].trim() : "Based on general sustainability assessment.",
-    tip: tipMatch ? tipMatch[1].trim() : "Look for certified organic or fair-trade alternatives.",
+    rating: Math.min(5, Math.max(0, parseFloat(ratingMatch[1]))),
+    reason: reasonMatch?.[1]?.trim() ?? "Based on general sustainability assessment.",
+    tip:    tipMatch?.[1]?.trim()    ?? "Look for certified organic or fair-trade alternatives.",
   };
 }
 
@@ -62,8 +70,14 @@ export default function Home() {
     try {
       const res = await analyseSustainability(productUrl.trim());
       setResult(res);
-    } catch {
-      setAnalyseError("Could not analyse this product. Please check the URL and try again.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not analyse this product.";
+      // Friendly quota message
+      if (msg.toLowerCase().includes("busy") || msg.toLowerCase().includes("quota") || msg.includes("429")) {
+        setAnalyseError("EcoBay AI is temporarily busy — please wait a few seconds and try again.");
+      } else {
+        setAnalyseError(msg);
+      }
     } finally {
       setIsAnalysing(false);
     }
@@ -82,8 +96,13 @@ export default function Home() {
     try {
       const res = await analyseSustainability(query);
       setResult(res);
-    } catch {
-      setAnalyseError("Could not analyse this product. Please try again.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not analyse this product.";
+      if (msg.toLowerCase().includes("busy") || msg.toLowerCase().includes("quota") || msg.includes("429")) {
+        setAnalyseError("EcoBay AI is temporarily busy — please wait a few seconds and try again.");
+      } else {
+        setAnalyseError(msg);
+      }
     } finally {
       setIsAnalysing(false);
     }
