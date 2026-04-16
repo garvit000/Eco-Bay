@@ -8,8 +8,10 @@ interface Props {
   onClose: () => void;
 }
 
-/** Tries to look up the barcode on Open Food Facts (free, no key needed). */
-async function lookupBarcode(barcode: string): Promise<string | null> {
+/** Stage 1: Open Food Facts database (free, no key, instant). */
+async function lookupOpenFoodFacts(
+  barcode: string
+): Promise<{ name: string; source: "database" } | null> {
   try {
     const res = await fetch(
       `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,
@@ -23,12 +25,66 @@ async function lookupBarcode(barcode: string): Promise<string | null> {
     if (data.status !== 1 || !data.product) return null;
     const name = data.product.product_name?.trim();
     const brand = data.product.brands?.trim();
-    if (name && brand) return `${brand} – ${name}`;
-    return name || brand || null;
+    const combined = name && brand ? `${brand} – ${name}` : name || brand || null;
+    return combined ? { name: combined, source: "database" } : null;
   } catch {
     return null;
   }
 }
+
+interface AIBarcodeResult {
+  product: string;
+  brand: string;
+  category: string;
+  origin: string;
+  confidence: "High" | "Medium" | "Low";
+  note: string;
+  source: "ai";
+}
+
+/** Stage 2: EcoBay AI identification (Gemini, used when DB has no record). */
+async function lookupWithAI(barcode: string): Promise<AIBarcodeResult | null> {
+  try {
+    const res = await fetch("/api/ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: `Identify this barcode: ${barcode}`,
+        mode: "barcode",
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { text?: string };
+    const text = data.text ?? "";
+
+    const get = (key: string) =>
+      text.match(new RegExp(`${key}:\\s*(.+)`, "i"))?.[1]?.trim() ?? "";
+
+    const product = get("PRODUCT");
+    const brand = get("BRAND");
+    const rawConf = get("CONFIDENCE").toLowerCase();
+
+    if (!product || product === "Unknown Product") return null;
+
+    return {
+      product,
+      brand,
+      category: get("CATEGORY"),
+      origin: get("ORIGIN"),
+      confidence: rawConf === "high" ? "High" : rawConf === "medium" ? "Medium" : "Low",
+      note: get("NOTE"),
+      source: "ai",
+    };
+  } catch {
+    return null;
+  }
+}
+
+type LookupResult =
+  | { name: string; source: "database" }
+  | AIBarcodeResult
+  | null;
 
 const SCANNER_ID = "eco-bay-barcode-scanner";
 
@@ -39,7 +95,7 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
   const [status, setStatus] = useState<"scanning" | "found" | "error">("scanning");
   const [errorMsg, setErrorMsg] = useState("");
   const [detectedBarcode, setDetectedBarcode] = useState("");
-  const [productName, setProductName] = useState<string | null>(null);
+  const [lookupResult, setLookupResult] = useState<LookupResult>(null);
   const [isLooking, setIsLooking] = useState(false);
 
   const stopScanner = async () => {
@@ -56,7 +112,7 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
     await stopScanner();
     setStatus("scanning");
     setDetectedBarcode("");
-    setProductName(null);
+    setLookupResult(null);
 
     try {
       const scanner = new Html5Qrcode(SCANNER_ID, {
@@ -84,9 +140,17 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
           setStatus("found");
 
           setIsLooking(true);
-          const name = await lookupBarcode(decodedText);
-          setProductName(name);
-          setIsLooking(false);
+          // Stage 1: Open Food Facts
+          const dbResult = await lookupOpenFoodFacts(decodedText);
+          if (dbResult) {
+            setLookupResult(dbResult);
+            setIsLooking(false);
+          } else {
+            // Stage 2: EcoBay AI identification
+            const aiResult = await lookupWithAI(decodedText);
+            setLookupResult(aiResult);
+            setIsLooking(false);
+          }
         },
         () => { /* frame error — ignore, happens every frame without a barcode */ }
       );
@@ -115,7 +179,19 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
   }, []);
 
   const handleConfirm = () => {
-    onDetected(detectedBarcode, productName ?? undefined);
+    let displayName: string | undefined;
+    if (lookupResult) {
+      if (lookupResult.source === "database") {
+        displayName = lookupResult.name;
+      } else {
+        // AI result — combine product + brand
+        const r = lookupResult;
+        displayName = r.brand && r.brand !== "Unknown Brand"
+          ? `${r.brand} – ${r.product}`
+          : r.product;
+      }
+    }
+    onDetected(detectedBarcode, displayName);
   };
 
   return (
@@ -172,10 +248,42 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
                     <span className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin inline-block" />
                     Looking up product…
                   </p>
-                ) : productName ? (
-                  <p className="text-sm text-gray-600 mt-1.5">📦 {productName}</p>
+                ) : lookupResult ? (
+                  lookupResult.source === "database" ? (
+                    <div className="mt-2">
+                      <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-full font-medium mb-1">
+                        📋 Database match
+                      </span>
+                      <p className="text-sm text-gray-700 font-medium">{lookupResult.name}</p>
+                    </div>
+                  ) : (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center gap-1 text-xs bg-purple-50 text-purple-600 border border-purple-100 px-2 py-0.5 rounded-full font-medium">
+                          🤖 AI identified
+                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          lookupResult.confidence === "High" ? "bg-green-50 text-green-600 border border-green-100" :
+                          lookupResult.confidence === "Medium" ? "bg-yellow-50 text-yellow-600 border border-yellow-100" :
+                          "bg-gray-100 text-gray-500"
+                        }`}>
+                          {lookupResult.confidence} confidence
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700 font-medium">
+                        {lookupResult.brand !== "Unknown Brand" && `${lookupResult.brand} – `}
+                        {lookupResult.product}
+                      </p>
+                      {lookupResult.category && lookupResult.category !== "Other" && (
+                        <p className="text-xs text-gray-400">Category: {lookupResult.category} · Origin: {lookupResult.origin}</p>
+                      )}
+                      {lookupResult.note && (
+                        <p className="text-xs text-gray-400 italic">{lookupResult.note}</p>
+                      )}
+                    </div>
+                  )
                 ) : (
-                  <p className="text-xs text-gray-400 mt-1.5">Product not in database — will analyse by barcode number</p>
+                  <p className="text-xs text-gray-400 mt-1.5">Could not identify product — will analyse by barcode number</p>
                 )}
               </div>
 
