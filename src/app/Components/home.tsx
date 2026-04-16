@@ -9,8 +9,10 @@ export default function Home() {
     const [isScanning, setIsScanning] = useState(false);
     const [email, setEmail] = useState("");
     const [isScrolled, setIsScrolled] = useState(false);
+    const [mounted, setMounted] = useState(false);
 
    useEffect(() => {
+        setMounted(true);
         const handleScroll = () => {
             setIsScrolled(window.scrollY > 50);
         };
@@ -41,7 +43,7 @@ export default function Home() {
                 <div className="absolute inset-0 bg-[url('/nature-pattern.png')] bg-cover opacity-20 mix-blend-overlay z-0"></div>
                 
                 <div className="absolute inset-0 z-0">
-                    {Array.from({ length: 20 }).map((_, i) => (
+                    {mounted && Array.from({ length: 20 }).map((_, i) => (
                         <div 
                             key={i}
                             className="absolute rounded-full bg-green-400/20 animate-float"

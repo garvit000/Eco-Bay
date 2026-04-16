@@ -1,10 +1,12 @@
 "use client";
 import Navbar from "../Components/navbar";
 import { useState } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../../ecobaybackend/lib/firebase";
 import { useRouter } from "next/navigation";
 
+const MOCK_EMAIL = process.env.NEXT_PUBLIC_MOCK_EMAIL ?? "";
+const MOCK_PASSWORD = process.env.NEXT_PUBLIC_MOCK_PASSWORD ?? "";
+
+export default function Login() {
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string>("");
@@ -15,14 +17,19 @@ import { useRouter } from "next/navigation";
     setError(""); // Reset error message before trying to login
 
     try {
-      // Try to log in with email and password
-      await signInWithEmailAndPassword(auth, email, password);
-      router.push("/dashboard"); // Redirect to the dashboard after successful login
-    } catch (error: any) {
-      setError(error.message); // Show any error message (e.g., invalid credentials)
+            const normalizedEmail = email.trim().toLowerCase();
+            const normalizedPassword = password.trim();
+
+            if (normalizedEmail === MOCK_EMAIL && normalizedPassword === MOCK_PASSWORD) {
+                 router.push("/dashboard");
+      } else {
+         setError("Invalid email or password. Please try again.");
+      }
+        } catch (error: unknown) {
+            setError(error instanceof Error ? error.message : "Login failed.");
     }
   };
-export default function Login() {
+
     return (
         <>
         <Navbar/>
@@ -33,7 +40,13 @@ export default function Login() {
                     <p className="text-gray-600 mt-2">Sign in to your EcoBay account</p>
                 </div>
                 
-                <form className="space-y-5">
+                {error && (
+                    <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm text-center">
+                        {error}
+                    </div>
+                )}
+                
+                <form className="space-y-5" onSubmit={handleLogin}>
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                         <input 
@@ -42,6 +55,8 @@ export default function Login() {
                             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" 
                             required 
                             placeholder="your@email.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                         />
                     </div>
                     
@@ -53,6 +68,8 @@ export default function Login() {
                             className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all" 
                             required 
                             placeholder="••••••••"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
                         />
                     </div>
                     
@@ -71,7 +88,8 @@ export default function Login() {
                         Sign in
                     </button>
                 </form>
-                
+
+
                 <div className="mt-6 text-center text-sm text-gray-600">
                     Don't have an account?{" "}
                     <a href="/register" className="font-medium text-green-600 hover:text-green-800">

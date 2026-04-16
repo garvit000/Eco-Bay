@@ -1,20 +1,31 @@
 "use client";
-import { GoogleGenAI } from "@google/genai";
-import { useState } from "react";
-
-const key = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || "";
-const ai = new GoogleGenAI({ apiKey: key });
+import { KeyboardEvent, useState } from "react";
 
 async function generateContent(prompt: string) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: prompt,
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ prompt }),
+      signal: controller.signal,
     });
-    return response.text;
-  } catch (error) {
-    console.error("Error generating content:", error);
-    throw error;
+
+    if (!response.ok) {
+      const errorData = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      throw new Error(errorData.error ?? "Chat request failed");
+    }
+
+    const data = (await response.json()) as { text?: string };
+    return data.text ?? "No response generated";
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -36,14 +47,18 @@ export default function Req() {
       if(result) setPrompt("");
       setResponse(result || "No response generated");
     } catch (err) {
-      setError("Failed to generate response. Please try again.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to generate response. Please try again.",
+      );
       console.error(err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") {
       handleSubmit();
     }
