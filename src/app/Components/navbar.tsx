@@ -5,10 +5,12 @@ import { useRouter, usePathname } from "next/navigation";
 import { ShoppingCart, User, LogIn, Menu, X, LogOut, Leaf } from "lucide-react";
 import { onAuthStateChanged, signOut, User as FirebaseUser } from "firebase/auth";
 import { auth } from "../../../ecobaybackend/lib/firebase";
+import { useCart } from "../context/CartContext";
 
 const Navbar = () => {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { totalItems } = useCart();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -93,27 +95,31 @@ const Navbar = () => {
             )}
 
             <Link
-              href={user ? "/dashboard" : "/login"}
+              href="/products"
               className="relative inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-emerald-600"
             >
               <ShoppingCart className="h-5 w-5" />
               <span className="ml-1">Cart</span>
-              <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                0
-              </span>
+              {totalItems > 0 && (
+                <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {totalItems > 99 ? "99+" : totalItems}
+                </span>
+              )}
             </Link>
           </div>
 
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center gap-2">
             <Link
-              href={user ? "/dashboard" : "/login"}
+              href="/products"
               className="relative p-2 text-gray-700 hover:text-emerald-600"
             >
               <ShoppingCart className="h-6 w-6" />
-              <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                0
-              </span>
+              {totalItems > 0 && (
+                <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {totalItems > 99 ? "99+" : totalItems}
+                </span>
+              )}
             </Link>
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
