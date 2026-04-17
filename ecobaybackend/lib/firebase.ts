@@ -21,7 +21,7 @@ const requiredEnvKeys = [
   "NEXT_PUBLIC_FIREBASE_APP_ID",
 ] as const;
 
-const missingFirebaseEnv = requiredEnvKeys.filter((key) => !process.env[key]);
+export const missingFirebaseEnv = requiredEnvKeys.filter((key) => !process.env[key]);
 export const isFirebaseConfigured = missingFirebaseEnv.length === 0;
 
 let authInstance: Auth | null = null;

@@ -3,9 +3,14 @@ import Navbar from "../Components/navbar";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
-import { auth } from "../../../ecobaybackend/lib/firebase";
+import { auth, missingFirebaseEnv } from "../../../ecobaybackend/lib/firebase";
 
 const googleProvider = new GoogleAuthProvider();
+
+const missingEnvMessage =
+  missingFirebaseEnv.length > 0
+    ? `Firebase is not configured. Missing: ${missingFirebaseEnv.join(", ")}`
+    : "Firebase is not configured. Please add NEXT_PUBLIC_FIREBASE_* env vars.";
 
 function GoogleIcon() {
   return (
@@ -32,7 +37,7 @@ export default function Login() {
     setIsLoading(true);
 
     if (!auth) {
-      setError("Firebase is not configured. Please add NEXT_PUBLIC_FIREBASE_* env vars.");
+      setError(missingEnvMessage);
       setIsLoading(false);
       return;
     }
@@ -59,7 +64,7 @@ export default function Login() {
     setIsGoogleLoading(true);
 
     if (!auth) {
-      setError("Firebase is not configured. Please add NEXT_PUBLIC_FIREBASE_* env vars.");
+      setError(missingEnvMessage);
       setIsGoogleLoading(false);
       return;
     }
