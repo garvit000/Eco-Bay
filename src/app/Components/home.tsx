@@ -14,6 +14,20 @@ interface SustainabilityResult {
   alternatives?: string;
 }
 
+function escapeRegex(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function parseField(text: string, labels: string[]): string | undefined {
+  const labelPattern = labels.map(escapeRegex).join("|");
+  const regex = new RegExp(
+    `(?:^|\\n)\\s*(?:${labelPattern})\\s*:\\s*([\\s\\S]*?)(?=\\n\\s*[A-Z][A-Z /_-]{2,}\\s*:|$)`,
+    "i"
+  );
+  const value = text.match(regex)?.[1]?.trim();
+  return value && value.length > 0 ? value : undefined;
+}
+
 async function analyseSustainability(input: string): Promise<SustainabilityResult> {
   const response = await fetch("/api/ai", {
     method: "POST",
@@ -35,21 +49,25 @@ async function analyseSustainability(input: string): Promise<SustainabilityResul
   const text = data.text ?? "";
   if (!text.trim()) throw new Error("AI returned an empty response. Please try again.");
 
-  // Parse structured response: RATING: X\nREASON: ...\nTIP: ...
-  const ratingMatch = text.match(/RATING:\s*([\d.]+)/i);
-  const reasonMatch = text.match(/REASON:\s*(.+)/i);
-  const tipMatch    = text.match(/TIP:\s*(.+)/i);
-  const ingredientsMatch = text.match(/INGREDIENTS:\s*(.+)/i);
-  const alternativesMatch = text.match(/ALTERNATIVES:\s*(.+)/i);
+  const ratingMatch = text.match(/RATING:\s*([0-5](?:\.\d+)?)/i);
+  const reason = parseField(text, ["REASON", "WHY", "JUSTIFICATION"]);
+  const tip = parseField(text, ["TIP", "ECO TIP"]);
+  const ingredients = parseField(text, [
+    "INGREDIENTS",
+    "MATERIALS",
+    "INGREDIENTS / MATERIALS",
+    "INGREDIENTS/MATERIALS",
+  ]);
+  const alternatives = parseField(text, ["ALTERNATIVES", "GREENER ALTERNATIVES"]);
 
   if (!ratingMatch) throw new Error("AI could not parse a rating from this product. Try a product name or brand instead of a URL.");
 
   return {
     rating: Math.min(5, Math.max(0, parseFloat(ratingMatch[1]))),
-    reason: reasonMatch?.[1]?.trim() ?? "Based on general sustainability assessment.",
-    tip:    tipMatch?.[1]?.trim()    ?? "Look for certified organic or fair-trade alternatives.",
-    ingredients: ingredientsMatch?.[1]?.trim() ?? "Information not available.",
-    alternatives: alternativesMatch?.[1]?.trim() ?? "No alternatives suggested.",
+    reason: reason ?? "Based on general sustainability assessment.",
+    tip: tip ?? "Look for certified organic or fair-trade alternatives.",
+    ingredients: ingredients ?? "Information not available.",
+    alternatives: alternatives ?? "No alternatives suggested.",
   };
 }
 
