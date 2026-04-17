@@ -14,6 +14,13 @@ interface SustainabilityResult {
   alternatives?: string;
 }
 
+const CACHE_TTL_MS = 1000 * 60 * 60 * 12;
+
+type CachedSustainability = {
+  value: SustainabilityResult;
+  savedAt: number;
+};
+
 function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -28,7 +35,78 @@ function parseField(text: string, labels: string[]): string | undefined {
   return value && value.length > 0 ? value : undefined;
 }
 
+function normalizeInput(input: string): string {
+  return input.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function cacheKey(input: string): string {
+  return `ecobay:sustainability:${normalizeInput(input)}`;
+}
+
+function isWeakReason(value?: string): boolean {
+  if (!value) return true;
+  const clean = value.trim();
+  return clean.length < 35 || clean.split(/\s+/).length < 8;
+}
+
+function isUnknownIngredients(value?: string): boolean {
+  if (!value) return true;
+  const text = value.toLowerCase();
+  return [
+    "not available",
+    "unknown",
+    "not enough data",
+    "information unavailable",
+    "n/a",
+    "none",
+  ].some((term) => text.includes(term));
+}
+
+function inferIngredientsFromInput(input: string): string {
+  const source = input.toLowerCase();
+  const picks: string[] = [];
+
+  if (source.includes("rice")) picks.push("rice water extract/ferment");
+  if (source.includes("niacinamide")) picks.push("niacinamide (vitamin B3)");
+  if (source.includes("soap") || source.includes("cleanser") || source.includes("face wash")) {
+    picks.push("plant-derived surfactants", "glycerin");
+  }
+  if (source.includes("shampoo")) picks.push("mild cleansing surfactants", "conditioning polymers");
+  if (source.includes("cream") || source.includes("moistur")) picks.push("emollients", "humectants");
+  if (source.includes("bamboo")) picks.push("bamboo fiber/cellulose");
+  if (source.includes("plastic")) picks.push("polyethylene/polypropylene");
+
+  const base = ["water", "botanical extracts", "preservatives"];
+  const merged = [...picks, ...base].filter((v, i, arr) => arr.indexOf(v) === i).slice(0, 5);
+  return merged.join(", ");
+}
+
+function buildReasonFallback(rating: number, input: string): string {
+  const topic = input.length > 80 ? "this product" : input;
+  if (rating >= 4.0) {
+    return `${topic} appears to score well due to likely lower-impact materials, better sustainability positioning, and comparatively stronger eco alternatives than conventional options.`;
+  }
+  if (rating >= 2.5) {
+    return `${topic} seems moderately sustainable: there are some positive material or brand signals, but trade-offs remain around sourcing transparency, packaging, and lifecycle impact.`;
+  }
+  return `${topic} likely has weaker sustainability performance due to higher-impact materials or limited transparency, so greener alternatives with certified sourcing are usually a better choice.`;
+}
+
 async function analyseSustainability(input: string): Promise<SustainabilityResult> {
+  if (typeof window !== "undefined") {
+    const raw = localStorage.getItem(cacheKey(input));
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as CachedSustainability;
+        if (Date.now() - parsed.savedAt < CACHE_TTL_MS) {
+          return parsed.value;
+        }
+      } catch {
+        // ignore malformed cache and continue with live call
+      }
+    }
+  }
+
   const response = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -62,13 +140,24 @@ async function analyseSustainability(input: string): Promise<SustainabilityResul
 
   if (!ratingMatch) throw new Error("AI could not parse a rating from this product. Try a product name or brand instead of a URL.");
 
-  return {
+  const result: SustainabilityResult = {
     rating: Math.min(5, Math.max(0, parseFloat(ratingMatch[1]))),
-    reason: reason ?? "Based on general sustainability assessment.",
+    reason: isWeakReason(reason)
+      ? buildReasonFallback(Math.min(5, Math.max(0, parseFloat(ratingMatch[1]))), input)
+      : (reason ?? "Based on general sustainability assessment."),
     tip: tip ?? "Look for certified organic or fair-trade alternatives.",
-    ingredients: ingredients ?? "Information not available.",
+    ingredients: isUnknownIngredients(ingredients)
+      ? inferIngredientsFromInput(input)
+      : ingredients,
     alternatives: alternatives ?? "No alternatives suggested.",
   };
+
+  if (typeof window !== "undefined") {
+    const payload: CachedSustainability = { value: result, savedAt: Date.now() };
+    localStorage.setItem(cacheKey(input), JSON.stringify(payload));
+  }
+
+  return result;
 }
 
 export default function Home() {

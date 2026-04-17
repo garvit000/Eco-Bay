@@ -97,7 +97,12 @@ Scoring guide (1.0–5.0 scale):
 
 Consider: materials sourcing, manufacturing ethics, packaging, supply chain transparency, certifications, and end-of-life recyclability.
 
-Respond EXACTLY in this format (no other text). If ingredients/components are unknown, make an educated guess based on typical products:
+Respond EXACTLY in this format (no other text).
+Rules:
+- REASON must be at least 18 words and explicitly justify the score with 2-3 factors.
+- INGREDIENTS must list at least 3 likely ingredients/materials for this product type.
+- Do NOT write "information not available", "unknown", or "not enough data" for INGREDIENTS.
+- If the input is only a URL/brand, infer a likely product type and provide best-effort typical ingredients.
 RATING: [X.X]
 REASON: [Clear explanation of why this rating was given, whether low or high, based on factors like footprint or supply chain]
 INGREDIENTS: [List of typical main ingredients or materials for this item]
@@ -177,7 +182,7 @@ const TOKEN_LIMITS: Record<string, number> = {
 // ─── Temperature per mode ────────────────────────────────────────────────────
 const TEMPERATURES: Record<string, number> = {
   chat: 0.55,       // slightly creative for conversation
-  sustainability: 0.2, // deterministic for scoring
+  sustainability: 0.0, // minimize rating variance for same prompt
   barcode: 0.1,     // very deterministic for identification
   recommend: 0.45,  // moderate for recommendations
 };
