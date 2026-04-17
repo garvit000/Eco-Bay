@@ -34,6 +34,34 @@ const KNOWN_BARCODE_SUSTAINABILITY: Record<string, SustainabilityResult> = {
   },
 };
 
+const KNOWN_ASIN_SUSTAINABILITY: Record<string, SustainabilityResult> = {
+  B09Z65JJ69: {
+    rating: 3.8,
+    reason:
+      "Pros:\n- Rice-water + niacinamide positioning with a relatively focused brightening formula profile.\n- Typically milder daily-use positioning than aggressive scrub-based cleansers.\n\nCons:\n- Packaged liquid product with recurring plastic waste over repeated purchases.\n- Contains cosmetic additives/fragrance systems that may not suit all sensitive users.",
+    ingredients:
+      "Water, niacinamide (vitamin B3), rice water/rice extract, glycerin, mild surfactants, preservative system, fragrance",
+    alternatives:
+      "Fragrance-free niacinamide cleansers in refill formats; low-ingredient gel cleansers from transparent ingredient-label brands",
+    tip: "Good everyday option, but choose refill packs or fragrance-free variants if you have sensitive skin.",
+  },
+  B08FTQXWC7: {
+    rating: 2.9,
+    reason:
+      "Pros:\n- Better than many harsh soaps for dark-spot focused cleansing.\n- Easy availability and generally affordable routine integration.\n\nCons:\n- Below our eco threshold due to conventional formulation footprint and recurring plastic packaging.\n- Active + fragrance/additive combinations may increase irritation risk for sensitive users.",
+    ingredients:
+      "Water, niacinamide, salicylic acid (BHA), cleansing surfactants, humectants, preservatives, fragrance components",
+    alternatives:
+      "Refillable/fragrance-free niacinamide cleanser options; gentle pH-balanced cleansers with simpler ingredient lists; solid cleansing bars with low-waste packaging",
+    tip: "Since this is below threshold, consider switching to a refillable or low-waste cleanser with a shorter ingredient list.",
+  },
+};
+
+function extractAsin(input: string): string | null {
+  const match = input.match(/\/dp\/([A-Z0-9]{10})/i);
+  return match?.[1]?.toUpperCase() ?? null;
+}
+
 function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -54,7 +82,7 @@ function normalizeInput(input: string): string {
 
 function cacheKey(input: string): string {
   // Version cache keys so logic improvements invalidate stale results.
-  return `ecobay:sustainability:v2:${normalizeInput(input)}`;
+  return `ecobay:sustainability:v3:${normalizeInput(input)}`;
 }
 
 function isWeakReason(value?: string): boolean {
@@ -155,6 +183,11 @@ function buildReasonFallback(rating: number, input: string): string {
 }
 
 async function analyseSustainability(input: string): Promise<SustainabilityResult> {
+  const asin = extractAsin(input);
+  if (asin && KNOWN_ASIN_SUSTAINABILITY[asin]) {
+    return KNOWN_ASIN_SUSTAINABILITY[asin];
+  }
+
   for (const [barcode, fixed] of Object.entries(KNOWN_BARCODE_SUSTAINABILITY)) {
     if (input.includes(barcode) || /too\s*yumm/i.test(input)) {
       return fixed;
