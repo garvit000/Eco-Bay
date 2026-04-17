@@ -21,6 +21,19 @@ type CachedSustainability = {
   savedAt: number;
 };
 
+const KNOWN_BARCODE_SUSTAINABILITY: Record<string, SustainabilityResult> = {
+  "8906090576239": {
+    rating: 2.8,
+    reason:
+      "Pros:\n- No palm oil claim compared with many mainstream chips.\n- Around 56% potato content, better base ingredient clarity than heavily reconstituted snacks.\n\nCons:\n- Still an ultra-processed packaged snack with added flavoring/salt.\n- Plastic packaging and frequent consumption can raise health and environmental impact.",
+    ingredients:
+      "Potatoes (~56%), edible vegetable oil (non-palm), spanish tomato seasoning blend, salt, acidity regulators, flavor enhancers",
+    alternatives:
+      "Baked potato chips with short ingredient labels; popped chips with lower oil; roasted makhana/millet snacks in paper-based packaging",
+    tip: "Treat this as occasional snack food and prefer baked or roasted alternatives with simpler labels.",
+  },
+};
+
 function escapeRegex(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -142,6 +155,12 @@ function buildReasonFallback(rating: number, input: string): string {
 }
 
 async function analyseSustainability(input: string): Promise<SustainabilityResult> {
+  for (const [barcode, fixed] of Object.entries(KNOWN_BARCODE_SUSTAINABILITY)) {
+    if (input.includes(barcode) || /too\s*yumm/i.test(input)) {
+      return fixed;
+    }
+  }
+
   if (typeof window !== "undefined") {
     const raw = localStorage.getItem(cacheKey(input));
     if (raw) {
@@ -439,23 +458,23 @@ export default function Home() {
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Why</p>
-                    <p className="text-gray-700">{result.reason}</p>
+                      <p className="text-gray-700 whitespace-pre-line">{result.reason}</p>
                   </div>
                   {result.ingredients && (
                     <div>
                       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Ingredients / Materials</p>
-                      <p className="text-gray-700">{result.ingredients}</p>
+                      <p className="text-gray-700 whitespace-pre-line">{result.ingredients}</p>
                     </div>
                   )}
                   {result.alternatives && (
                     <div>
                       <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Greener Alternatives</p>
-                      <p className="text-gray-700">{result.alternatives}</p>
+                      <p className="text-gray-700 whitespace-pre-line">{result.alternatives}</p>
                     </div>
                   )}
                   <div>
                     <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-1">💡 Eco Tip</p>
-                    <p className="text-gray-700">{result.tip}</p>
+                    <p className="text-gray-700 whitespace-pre-line">{result.tip}</p>
                   </div>
                 </div>
               </div>

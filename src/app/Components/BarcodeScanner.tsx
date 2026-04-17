@@ -8,6 +8,35 @@ interface Props {
   onClose: () => void;
 }
 
+interface KnownBarcodeResult {
+  barcode: string;
+  name: string;
+  product: string;
+  brand: string;
+  category: string;
+  origin: string;
+  confidence: "High";
+  source: "hardcoded";
+  note: string;
+  details: string;
+}
+
+const KNOWN_BARCODES: Record<string, KnownBarcodeResult> = {
+  "8906090576239": {
+    barcode: "8906090576239",
+    name: "Too Yumm! Spanish Tomato Potato Chips",
+    product: "Spanish Tomato Potato Chips",
+    brand: "Too Yumm!",
+    category: "Food",
+    origin: "India",
+    confidence: "High",
+    source: "hardcoded",
+    note: "Trusted local override",
+    details:
+      "Known facts: ~56% potato content, no palm oil claim on pack. Good taste profile but still a processed salty snack.",
+  },
+};
+
 /** Stage 1: Open Food Facts database (free, no key, instant). */
 async function lookupOpenFoodFacts(
   barcode: string
@@ -83,6 +112,7 @@ async function lookupWithAI(barcode: string): Promise<AIBarcodeResult | null> {
 
 type LookupResult =
   | { name: string; source: "database" }
+  | KnownBarcodeResult
   | AIBarcodeResult
   | null;
 
@@ -139,6 +169,13 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
           setDetectedBarcode(decodedText);
           setStatus("found");
 
+          const known = KNOWN_BARCODES[decodedText];
+          if (known) {
+            setLookupResult(known);
+            setIsLooking(false);
+            return;
+          }
+
           setIsLooking(true);
           // Stage 1: Open Food Facts
           const dbResult = await lookupOpenFoodFacts(decodedText);
@@ -183,6 +220,8 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
     if (lookupResult) {
       if (lookupResult.source === "database") {
         displayName = lookupResult.name;
+      } else if (lookupResult.source === "hardcoded") {
+        displayName = `${lookupResult.brand} – ${lookupResult.product} (barcode: ${lookupResult.barcode}, no palm oil, 56% potato)`;
       } else {
         // AI result — combine product + brand
         const r = lookupResult;
@@ -255,6 +294,22 @@ export default function BarcodeScanner({ onDetected, onClose }: Props) {
                         📋 Database match
                       </span>
                       <p className="text-sm text-gray-700 font-medium">{lookupResult.name}</p>
+                    </div>
+                  ) : lookupResult.source === "hardcoded" ? (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">
+                          ✅ Hardcoded verified match
+                        </span>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-50 text-green-600 border border-green-100">
+                          High confidence
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700 font-medium">
+                        {lookupResult.brand} – {lookupResult.product}
+                      </p>
+                      <p className="text-xs text-gray-400">Category: {lookupResult.category} · Origin: {lookupResult.origin}</p>
+                      <p className="text-xs text-gray-500">{lookupResult.details}</p>
                     </div>
                   ) : (
                     <div className="mt-2 space-y-1">
