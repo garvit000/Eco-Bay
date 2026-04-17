@@ -8,6 +8,11 @@ const useAuth = () => {
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user); // Set the user when authentication state changes
       setLoading(false);

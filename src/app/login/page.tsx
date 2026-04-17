@@ -31,6 +31,12 @@ export default function Login() {
     setError("");
     setIsLoading(true);
 
+    if (!auth) {
+      setError("Firebase is not configured. Please add NEXT_PUBLIC_FIREBASE_* env vars.");
+      setIsLoading(false);
+      return;
+    }
+
     try {
       await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
       router.push("/dashboard");
@@ -51,6 +57,13 @@ export default function Login() {
   const handleGoogleSignIn = async () => {
     setError("");
     setIsGoogleLoading(true);
+
+    if (!auth) {
+      setError("Firebase is not configured. Please add NEXT_PUBLIC_FIREBASE_* env vars.");
+      setIsGoogleLoading(false);
+      return;
+    }
+
     try {
       await signInWithPopup(auth, googleProvider);
       router.push("/dashboard");

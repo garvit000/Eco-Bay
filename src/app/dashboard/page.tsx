@@ -26,6 +26,11 @@ export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (!firebaseUser) {
         router.push("/login");
@@ -45,6 +50,23 @@ export default function DashboardPage() {
           <p className="text-emerald-700 font-medium">Loading your dashboard…</p>
         </div>
       </div>
+    );
+  }
+
+  if (!auth) {
+    return (
+      <>
+        <Navbar />
+        <main className="min-h-screen flex items-center justify-center bg-emerald-50 px-6">
+          <div className="max-w-lg bg-white border border-emerald-200 rounded-2xl shadow-sm p-6 text-center">
+            <h1 className="text-xl font-semibold text-emerald-800">Firebase is not configured</h1>
+            <p className="mt-2 text-sm text-gray-600">
+              Add your NEXT_PUBLIC_FIREBASE_* environment variables in Vercel Project Settings,
+              then redeploy.
+            </p>
+          </div>
+        </main>
+      </>
     );
   }
 

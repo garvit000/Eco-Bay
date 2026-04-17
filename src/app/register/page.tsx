@@ -56,6 +56,12 @@ export default function Register() {
     setIsLoading(true);
     setErrors({});
 
+    if (!auth) {
+      setErrors({ form: "Firebase is not configured. Please add NEXT_PUBLIC_FIREBASE_* env vars." });
+      setIsLoading(false);
+      return;
+    }
+
     // Client-side validation
     const result = registerSchema.safeParse(formData);
     if (!result.success) {
@@ -94,6 +100,13 @@ export default function Register() {
   const handleGoogleSignUp = async () => {
     setErrors({});
     setIsGoogleLoading(true);
+
+    if (!auth) {
+      setErrors({ form: "Firebase is not configured. Please add NEXT_PUBLIC_FIREBASE_* env vars." });
+      setIsGoogleLoading(false);
+      return;
+    }
+
     try {
       await signInWithPopup(auth, googleProvider);
       setSuccess(true);

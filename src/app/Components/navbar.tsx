@@ -15,6 +15,11 @@ const Navbar = () => {
   const pathname = usePathname();
 
   useEffect(() => {
+    if (!auth) {
+      setUser(null);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
     });
@@ -22,6 +27,7 @@ const Navbar = () => {
   }, []);
 
   const handleLogout = async () => {
+    if (!auth) return;
     await signOut(auth);
     router.push("/");
   };
