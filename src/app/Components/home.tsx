@@ -40,7 +40,8 @@ function normalizeInput(input: string): string {
 }
 
 function cacheKey(input: string): string {
-  return `ecobay:sustainability:${normalizeInput(input)}`;
+  // Version cache keys so logic improvements invalidate stale results.
+  return `ecobay:sustainability:v2:${normalizeInput(input)}`;
 }
 
 function isWeakReason(value?: string): boolean {
@@ -64,21 +65,69 @@ function isUnknownIngredients(value?: string): boolean {
 
 function inferIngredientsFromInput(input: string): string {
   const source = input.toLowerCase();
-  const picks: string[] = [];
+  const foodKeywords = [
+    "chips",
+    "snack",
+    "crisps",
+    "potato",
+    "nacho",
+    "kurkure",
+    "namkeen",
+    "choco",
+    "biscuit",
+    "cookie",
+    "noodle",
+    "drink",
+    "beverage",
+  ];
+  const beautyKeywords = [
+    "niacinamide",
+    "serum",
+    "face wash",
+    "cleanser",
+    "cream",
+    "moistur",
+    "shampoo",
+    "conditioner",
+    "lotion",
+    "soap",
+  ];
 
-  if (source.includes("rice")) picks.push("rice water extract/ferment");
-  if (source.includes("niacinamide")) picks.push("niacinamide (vitamin B3)");
-  if (source.includes("soap") || source.includes("cleanser") || source.includes("face wash")) {
-    picks.push("plant-derived surfactants", "glycerin");
+  if (foodKeywords.some((k) => source.includes(k))) {
+    if (source.includes("chips") || source.includes("crisps") || source.includes("potato")) {
+      return "potatoes or potato flakes, edible vegetable oil (such as palmolein/sunflower), salt, seasoning/spice blend, acidity regulators";
+    }
+    if (source.includes("choco") || source.includes("biscuit") || source.includes("cookie")) {
+      return "wheat flour/refined flour, sugar, edible vegetable oil, cocoa solids or flavoring, leavening agents";
+    }
+    if (source.includes("drink") || source.includes("beverage")) {
+      return "water, sugar or sweetener, flavoring agents, acidity regulators, permitted preservatives";
+    }
+    return "main food base (grains/potato/pulses), edible vegetable oil, salt, seasoning blend, preservatives or stabilizers";
   }
-  if (source.includes("shampoo")) picks.push("mild cleansing surfactants", "conditioning polymers");
-  if (source.includes("cream") || source.includes("moistur")) picks.push("emollients", "humectants");
-  if (source.includes("bamboo")) picks.push("bamboo fiber/cellulose");
-  if (source.includes("plastic")) picks.push("polyethylene/polypropylene");
 
-  const base = ["water", "botanical extracts", "preservatives"];
-  const merged = [...picks, ...base].filter((v, i, arr) => arr.indexOf(v) === i).slice(0, 5);
-  return merged.join(", ");
+  if (beautyKeywords.some((k) => source.includes(k))) {
+    const picks: string[] = [];
+    if (source.includes("rice")) picks.push("rice water extract/ferment");
+    if (source.includes("niacinamide")) picks.push("niacinamide (vitamin B3)");
+    if (source.includes("soap") || source.includes("cleanser") || source.includes("face wash")) {
+      picks.push("plant-derived surfactants", "glycerin");
+    }
+    if (source.includes("shampoo")) picks.push("mild cleansing surfactants", "conditioning polymers");
+    if (source.includes("cream") || source.includes("moistur")) picks.push("emollients", "humectants");
+    const base = ["water", "botanical extracts", "preservatives"];
+    const merged = [...picks, ...base].filter((v, i, arr) => arr.indexOf(v) === i).slice(0, 5);
+    return merged.join(", ");
+  }
+
+  if (source.includes("bamboo")) {
+    return "bamboo fiber/cellulose, binder resin, coating materials, packaging additives";
+  }
+  if (source.includes("plastic")) {
+    return "polyethylene/polypropylene, colorants, plasticizers/additives, stabilizers";
+  }
+
+  return "primary base material, additives or binders, preservatives or stabilizers, flavoring/fragrance components";
 }
 
 function buildReasonFallback(rating: number, input: string): string {
