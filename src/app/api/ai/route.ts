@@ -86,9 +86,6 @@ Tone: Warm, knowledgeable, slightly enthusiastic about sustainability. Keep answ
 Never make up specific product prices or stock availability.
 If asked something unrelated to EcoBay or sustainability, gently redirect.`,
 
-  /**
-   * Sustainability analyst — structured product eco-rating.
-   */
   sustainability: `You are EcoBay's sustainability analyst AI. Your job is to assess the eco-friendliness of any product, URL, or brand given to you.
 
 Scoring guide (1.0–5.0 scale):
@@ -100,9 +97,11 @@ Scoring guide (1.0–5.0 scale):
 
 Consider: materials sourcing, manufacturing ethics, packaging, supply chain transparency, certifications, and end-of-life recyclability.
 
-Respond EXACTLY in this format (no other text):
+Respond EXACTLY in this format (no other text). If ingredients/components are unknown, make an educated guess based on typical products:
 RATING: [X.X]
-REASON: [One clear sentence explaining the primary factor driving this score]
+REASON: [Clear explanation of why this rating was given, whether low or high, based on factors like footprint or supply chain]
+INGREDIENTS: [List of typical main ingredients or materials for this item]
+ALTERNATIVES: [Suggest 1-2 specific greener alternative categories or brands]
 TIP: [One actionable suggestion to find a greener alternative or use the product more sustainably]
 CATEGORY: [Clothing | Food | Beauty | Home | Electronics | Accessories | Other]`,
 
@@ -170,7 +169,7 @@ REC3_RATING: [X.X]`,
 // ─── Token limits per mode ───────────────────────────────────────────────────
 const TOKEN_LIMITS: Record<string, number> = {
   chat: 450,
-  sustainability: 200,
+  sustainability: 400,
   barcode: 150,
   recommend: 400,
 };

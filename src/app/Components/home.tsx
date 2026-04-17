@@ -10,6 +10,8 @@ interface SustainabilityResult {
   rating: number;
   reason: string;
   tip: string;
+  ingredients?: string;
+  alternatives?: string;
 }
 
 async function analyseSustainability(input: string): Promise<SustainabilityResult> {
@@ -37,6 +39,8 @@ async function analyseSustainability(input: string): Promise<SustainabilityResul
   const ratingMatch = text.match(/RATING:\s*([\d.]+)/i);
   const reasonMatch = text.match(/REASON:\s*(.+)/i);
   const tipMatch    = text.match(/TIP:\s*(.+)/i);
+  const ingredientsMatch = text.match(/INGREDIENTS:\s*(.+)/i);
+  const alternativesMatch = text.match(/ALTERNATIVES:\s*(.+)/i);
 
   if (!ratingMatch) throw new Error("AI could not parse a rating from this product. Try a product name or brand instead of a URL.");
 
@@ -44,6 +48,8 @@ async function analyseSustainability(input: string): Promise<SustainabilityResul
     rating: Math.min(5, Math.max(0, parseFloat(ratingMatch[1]))),
     reason: reasonMatch?.[1]?.trim() ?? "Based on general sustainability assessment.",
     tip:    tipMatch?.[1]?.trim()    ?? "Look for certified organic or fair-trade alternatives.",
+    ingredients: ingredientsMatch?.[1]?.trim() ?? "Information not available.",
+    alternatives: alternativesMatch?.[1]?.trim() ?? "No alternatives suggested.",
   };
 }
 
@@ -279,6 +285,18 @@ export default function Home() {
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Why</p>
                     <p className="text-gray-700">{result.reason}</p>
                   </div>
+                  {result.ingredients && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Ingredients / Materials</p>
+                      <p className="text-gray-700">{result.ingredients}</p>
+                    </div>
+                  )}
+                  {result.alternatives && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Greener Alternatives</p>
+                      <p className="text-gray-700">{result.alternatives}</p>
+                    </div>
+                  )}
                   <div>
                     <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide mb-1">💡 Eco Tip</p>
                     <p className="text-gray-700">{result.tip}</p>
