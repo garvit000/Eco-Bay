@@ -18,7 +18,7 @@ if (!apiKey) console.warn("[EcoBay AI] GEMINI_API_KEY is not configured.");
 const ai = new GoogleGenAI({ apiKey: apiKey ?? "" });
 
 /** Model to use — 1.5-flash has a separate free-tier quota from 2.0-flash */
-const MODEL = "gemini-1.5-flash";
+const MODEL = "gemini-2.5-flash";
 
 /** Sleep helper */
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
